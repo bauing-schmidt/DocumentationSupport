@@ -9,7 +9,7 @@ DocModelWithKey >> asPresenterIn: anApplication [
 { #category : #'*DocumentationSupport-UI' }
 DocModelWithKey >> openIn: anApplication [
 
-	(self asPresenterIn: anApplication) openWithSpec
+	(self asPresenterIn: anApplication) open
 ]
 
 { #category : #'*DocumentationSupport-UI' }

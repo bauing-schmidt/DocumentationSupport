@@ -8,21 +8,68 @@ Class {
 		'chapters'
 	],
 	#classInstVars : [
-		'cssDictionnary'
+		'cssDictionnary',
+		'defaultStyles'
 	],
 	#category : #'DocumentationSupport-Model'
 }
 
 { #category : #accessing }
-DocBook class >> at: aKey [
+DocBook class >> cssAt: aKey [
 	cssDictionnary ifNil: [ ^ nil ].
 	cssDictionnary at: aKey ifPresent: [ :value | ^ value ]
 ]
 
 { #category : #accessing }
-DocBook class >> at: aKey put: aCSSDictionnary [
+DocBook class >> cssAt: aKey ifAbsent: aBlock [
+	cssDictionnary ifNil: [ ^ nil ].
+	^ cssDictionnary at: aKey ifPresent: [ :value | value ] ifAbsent: aBlock
+]
+
+{ #category : #accessing }
+DocBook class >> cssAt: aKey put: aCSSDictionnary [
 	cssDictionnary ifNil: [ cssDictionnary := Dictionary new ].
 	cssDictionnary at: aKey put: aCSSDictionnary
+]
+
+{ #category : #accessing }
+DocBook class >> defaultStyles [ 
+
+	^ defaultStyles ifNil: [ defaultStyles := self defaultStylesContent ]
+]
+
+{ #category : #accessing }
+DocBook class >> defaultStylesContent [
+	
+	| defaultSize |
+	defaultSize := 12.
+	
+	^ Dictionary new at: #header put: OrderedCollection new;
+		at: #text put: OrderedCollection new;
+		at: #bold put: OrderedCollection new;
+		at: #italic put: OrderedCollection new;
+		at: #strike put: OrderedCollection new;
+		at: #monospace put: OrderedCollection new;
+		at: #link put: OrderedCollection new;
+		at: #code put: OrderedCollection new;
+		
+		at: #headerSize put: OrderedCollection new;
+		at: #textSize put: defaultSize;
+		at: #boldSize put: defaultSize;
+		at: #italicSize put: defaultSize;
+		at: #strikeSize put: defaultSize;
+		at: #monospaceSize put: defaultSize;
+		at: #linkSize put: defaultSize;
+		at: #codeSize put: defaultSize;
+		yourself
+]
+
+{ #category : #accessing }
+DocBook class >> resetDefaultStylesContent [
+
+	<script>
+	
+	defaultStyles := nil
 ]
 
 { #category : #'drag and drop' }
@@ -165,6 +212,7 @@ DocBook >> addNewChapter [
 	newChapter := self addNewChapterWithoutNotification.
 	library aspectChanged: #chapters.
 	DocChapter addDictionaryOfChapters: newChapter.
+	EpMonitor current addEvent: newChapter asEpDocChapterAddition.
 	^ newChapter
 ]
 
@@ -282,13 +330,13 @@ DocBook >> generateCSS: aDictionary [
 	| css |
 	aDictionary at: #globalSize 
 		ifPresent: [ :value | css := self createEmptyCSS: value asInteger ]
-		ifAbsent: [ css := self createEmptyCSS: 10 ].
+		ifAbsent: [ css := self createEmptyCSS: 13 ].
 	self addCSSColor: aDictionary in: css;
 	addCSSBackGroundColor: aDictionary in: css;
 	addCSSPoliceSize: aDictionary in: css;
 	addGlobalColorWithOpacity: aDictionary in: css  type: #Color;
 	addGlobalColorWithOpacity: aDictionary in: css type: #BackgroundColor.
-	DocBook at: key put: css. 
+	DocBook cssAt: key put: css. 
 ]
 
 { #category : #accessing }

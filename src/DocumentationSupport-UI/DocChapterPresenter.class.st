@@ -136,10 +136,9 @@ DocChapterPresenter >> editShortcut: aCategory [
 { #category : #preview }
 DocChapterPresenter >> getPreviewPresenter [ 
 
-	| textMorph presenter src |
+	| textMorph presenter |
 	
-	src := chapter ifNil: [ '' ] ifNotNil: [ chapter source ].
-	textMorph := self previewMorphFor: src.
+	textMorph := self previewMorphFor: chapter text.
 
 	presenter := SpMorphPresenter new.
 	presenter morph: textMorph.
@@ -186,9 +185,9 @@ DocChapterPresenter >> headerShortcut: aCategory [
 ]
 
 { #category : #initialization }
-DocChapterPresenter >> initialize [
+DocChapterPresenter >> initialize [ 
+
 	super initialize.
-	self setShortcuts
 ]
 
 { #category : #initialization }
@@ -310,7 +309,7 @@ DocChapterPresenter >> openReference: aRef [
 		ifNotNil: [ 
 			parent openChapter: aKey. ]
 		ifNil: [ 
-			(self class on: (self chapter library chapterOfKey: aKey) application: self application) openWithSpec
+			(self class on: (self chapter library chapterOfKey: aKey) application: self application) open
 			 ]
 	
 
@@ -360,6 +359,14 @@ DocChapterPresenter >> previewMorphFor: aSource [
 	textModel setInitialText: text.
 	
 	 ^ textMorph
+]
+
+{ #category : #tests }
+DocChapterPresenter >> scrollAt: aScrollValue [
+	| morph scroll |
+	morph := preview morph.
+	scroll := morph scrollPane.
+	scroll vScrollbarValue: aScrollValue.
 ]
 
 { #category : #accessing }
@@ -432,17 +439,17 @@ DocChapterPresenter >> text [
 { #category : #preview }
 DocChapterPresenter >> textFor: aSource [
 
-	|  builder text richTextComposer |
+	"we cannot use the standard chapter generated text because the rich text composer needs to 
+	know the library presenter for generating links, search environment for highlights etc."
 
-	builder := MicrodownParser builder.
-	builder text: aSource.
+	|  text richTextComposer |
+
 	text := [ 
-		| parser tree |
-		parser := MicrodownParser new.
-		tree := parser parse: builder contents.
+		| tree |
+		tree := chapter ast.
 		richTextComposer := DocRichTextComposer new
 			executor: self;
-			css: self chapter.
+			css: self chapter css.
 		self parent 
 			ifNotNil: [ 
 				richTextComposer libraryPresenter: self parent.
@@ -454,14 +461,12 @@ DocChapterPresenter >> textFor: aSource [
 		richTextComposer visit: tree
 		]
 		on: STONReaderError, MicParsingError, MessageNotUnderstood, SubclassResponsibility 
-			do: [ :e | builder contents ].
+			do: [ :e | aSource ].
 	^ text
 ]
 
 { #category : #preview }
 DocChapterPresenter >> updatePreview: newSource [ 
-
-		| newText |
 
 	previewUpdateMutex critical: [ 
 		updateProcess ifNotNil: [ 

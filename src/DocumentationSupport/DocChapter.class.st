@@ -6,7 +6,13 @@ Class {
 	#superclass : #DocModelWithKey,
 	#instVars : [
 		'source',
-		'nextChapter'
+		'nextChapter',
+		'ast',
+		'monospaceTexts',
+		'chapterText',
+		'chapterTextString',
+		'chapterTextStringLowercase',
+		'monospaceSearchResults'
 	],
 	#classInstVars : [
 		'dictionaryOfChapters'
@@ -87,6 +93,17 @@ DocChapter >> acceptVisitor: aVisitor [
 	aVisitor visitChapter: self
 ]
 
+{ #category : #'API - search' }
+DocChapter >> addMatchingMonospaceText: aString to: aCollection [
+
+	monospaceTexts do: [ :each | 
+		each substring = aString
+			ifTrue: [ aCollection add: each ] ]
+
+	
+
+]
+
 { #category : #serialization }
 DocChapter >> addMetadataTo: aDictionary [ 
 
@@ -103,7 +120,48 @@ DocChapter >> addNewChapter [
 	newChapter parent: self.
 	library aspectChanged: #chapters.
 	DocChapter addDictionaryOfChapters: newChapter.
+	EpMonitor current addEvent: newChapter asEpDocChapterAddition.
 	^ newChapter
+]
+
+{ #category : #converting }
+DocChapter >> asEpDocChapterAddition [
+
+	^ EpDocChapterAddition new
+		key: self key;
+		title: self title;
+		parentKey: self parentKeyOrNil;
+		libraryKey: self libraryKeyOrNil;
+		nextChapterKey: self nextChapterKeyOrNil;
+		source: self source;
+		yourself
+]
+
+{ #category : #converting }
+DocChapter >> asEpDocChapterModification [
+
+	^ EpDocChapterModification new
+		key: self key;
+		title: self title;
+		parentKey: self parentKeyOrNil;
+		libraryKey: self libraryKeyOrNil;
+		nextChapterKey: self nextChapterKeyOrNil;
+		source: self source;
+		yourself
+]
+
+{ #category : #events }
+DocChapter >> aspectChanged: aSymbol [ 
+
+	super aspectChanged: aSymbol.
+	EpDocLogger addChange: self asEpDocChapterModification.
+
+]
+
+{ #category : #accessing }
+DocChapter >> ast [ 
+
+	^ ast
 ]
 
 { #category : #removing }
@@ -113,12 +171,36 @@ DocChapter >> chapterRemoved: anotherChapter [
 		self nextChapter: nil ].
 ]
 
+{ #category : #'API - search' }
+DocChapter >> chapterTextString [
+
+	^ chapterTextString
+]
+
+{ #category : #'API - search' }
+DocChapter >> chapterTextStringLowercase [
+
+	^ chapterTextStringLowercase
+]
+
 { #category : #accessing }
 DocChapter >> children [
 
 	^ self sortedChapters: (self book chapters select: [ :each | each parent = self ])
 	
 
+]
+
+{ #category : #accessing }
+DocChapter >> css [ 
+	
+	^ DocBook defaultStyles
+
+"	| rootChapter |
+	rootChapter := self rootChapter.
+	^ DocBook cssAt: rootChapter key ifAbsent: [ DocBook defaultStyles ].
+	"
+	
 ]
 
 { #category : #removing }
@@ -132,14 +214,35 @@ DocChapter >> delete [
 ]
 
 { #category : #'API - search' }
+DocChapter >> findMonospaceText: aString [ 
+
+	| resultEntries |
+	
+	resultEntries := OrderedCollection new.
+
+	monospaceTexts do: [ :each | 
+		each substring = aString
+			ifTrue: [ 
+				| newEntry |
+				newEntry := DocResultEntry 
+					chapter: self 
+					startPosition: each start 
+					endPosition: each end
+					scrollValue: 0.0.
+				resultEntries add: newEntry ]].
+		
+	^ resultEntries
+]
+
+{ #category : #'API - search' }
 DocChapter >> findNextString: aSearchPattern startingAt: currentSearchPosition restrictedBy: limitIndex withSensitiveCase: aBoolean [
 
 	| foundPosition tree text lines1 lines2 |
-	tree := MicrodownParser parse: source.
+	tree := self ast.
 	
 	text := aBoolean 
-		ifFalse: [ (DocRichTextComposer new visit: tree) string asLowercase ] 
-		ifTrue: [ (DocRichTextComposer new visit: tree) string ].
+		ifFalse: [ chapterTextStringLowercase ] 
+		ifTrue: [ chapterTextString ].
 	foundPosition := aBoolean 
 		ifFalse: [ text findString: aSearchPattern asLowercase startingAt: currentSearchPosition ] 
 		ifTrue: [ text findString: aSearchPattern startingAt: currentSearchPosition ].
@@ -251,6 +354,14 @@ DocChapter >> nextChapter: anObject [
 ]
 
 { #category : #accessing }
+DocChapter >> nextChapterKeyOrNil [
+
+	nextChapter ifNil: [ ^ nil ].
+	
+	^ nextChapter key
+]
+
+{ #category : #accessing }
 DocChapter >> nextChapterText [ 
 
 	^  nextChapter ifNil: [''] ifNotNil: [:c | c title ] 
@@ -281,6 +392,23 @@ DocChapter >> numberOfLineOf: aText from: aBegin to: aEnd [
 	^ numberOfLine 
 ]
 
+{ #category : #parsing }
+DocChapter >> parse [
+	
+	ast := nil.
+	[ 
+		| parser |
+		parser := MicrodownParser new.
+		ast := parser parse: source.
+		monospaceTexts := ast monospaceTexts.
+		chapterText := self textFor: source.
+		chapterTextString := chapterText asString.
+		chapterTextStringLowercase := chapterTextString asLowercase. 
+		monospaceSearchResults := self prebuildMonospaceSearchResults.
+	] on: MicParsingError do: [ :e | ].
+
+]
+
 { #category : #accessing }
 DocChapter >> path [
 	"return the path to show the chapter in SpTreePresenter"
@@ -291,6 +419,12 @@ DocChapter >> path [
 		ifFalse: [ col := parent path ].
 	col add: (parent children indexOf: self).
 	^ col
+]
+
+{ #category : #parsing }
+DocChapter >> prebuildMonospaceSearchResults [
+
+
 ]
 
 { #category : #printing }
@@ -316,17 +450,29 @@ DocChapter >> readMetadataFrom: aDictionary [
 { #category : #serialization }
 DocChapter >> readSourceFrom: aStream [.
 
-	source := aStream upToEnd withInternalLineEndings
+	source := aStream upToEnd withInternalLineEndings.
+	self parse.
 ]
 
 { #category : #serialization }
 DocChapter >> readStonKey: aKey value: value [
 
 	super readStonKey: aKey value: value.
-	aKey = #source ifTrue: [ source := value ].
+	aKey = #source ifTrue: [ 
+		source := value.
+		self parse ].
 	aKey = #nextChapter ifTrue: [ nextChapter := DocParentReference key: value ].
 	
 	
+]
+
+{ #category : #accessing }
+DocChapter >> rootChapter [ 
+
+	^ self parent ifNil: [ self ] ifNotNil: [ :p | 
+		p isParentReference
+			ifFalse: [ p rootChapter ]
+			ifTrue: [ self ] ]
 ]
 
 { #category : #serialization }
@@ -357,8 +503,12 @@ DocChapter >> source [
 DocChapter >> source: aSource [
 
 	aSource = source 
-		ifFalse: [ self makeDirty ].
+		ifTrue: [ ^ self ].
+			
+	self makeDirty.
 	source := aSource.
+	
+	self parse.
 	
 	self aspectChanged: #source
 
@@ -379,6 +529,31 @@ DocChapter >> stonOn: stonWriter [
 DocChapter >> subchapters [ 
 
 	^ self book chapters select: [ :each | each parent = self ]
+]
+
+{ #category : #accessing }
+DocChapter >> text [ 
+
+	^ chapterText ifNil: [ 
+		self parse.
+		chapterText ]
+]
+
+{ #category : #accessing }
+DocChapter >> textFor: aSource [
+
+	|  text richTextComposer |
+
+	text := [ 
+		| tree |
+		tree := self ast.
+		richTextComposer := DocRichTextComposer new
+			executor: self;
+			css: self css.
+		richTextComposer visit: tree
+		] on: STONReaderError, MicParsingError, MessageNotUnderstood, SubclassResponsibility 
+			do: [ :e | e asString, String lf, String lf, aSource ].
+	^ text
 ]
 
 { #category : #accessing }

@@ -215,10 +215,10 @@ DocSearchEnvironment >> searchRegex: aRegex in: aChapter restrictedBy: aRangeInt
 	docResultEntries := OrderedCollection new.
 	currentSearchPosition := aRangeInterval first.
 	
-	tree := MicrodownParser parse: aChapter source.
+	tree := aChapter ast.
 	text := aBoolean 
-		ifFalse: [ (DocRichTextComposer new visit: tree) string asLowercase ] 
-		ifTrue: [ (DocRichTextComposer new visit: tree) string ].
+		ifFalse: [ aChapter chapterTextStringLowercase ] 
+		ifTrue: [ aChapter chapterTextString ].
 	text := text copyFrom: aRangeInterval first to: text size.
 	regexWords := aRegex matchesIn: text.
 	regexWords do: [ :word | 
@@ -232,4 +232,10 @@ DocSearchEnvironment >> searchRegex: aRegex in: aChapter restrictedBy: aRangeInt
 
 
 
+]
+
+{ #category : #accessing }
+DocSearchEnvironment >> setCurrentResult: aSearchResult [ 
+
+	currentEntryIndex := resultEntries indexOf: aSearchResult
 ]

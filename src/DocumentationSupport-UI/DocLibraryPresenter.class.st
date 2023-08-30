@@ -618,6 +618,22 @@ DocLibraryPresenter >> setSearchButton [
 							] on: SubscriptOutOfBounds,MessageNotUnderstood  do: [ self clickAt ]  ]
 ]
 
+{ #category : #'search-bar' }
+DocLibraryPresenter >> setSearchEnvironment: aSearchEnvironment [ 
+
+	| oldEntry |
+	searchEnv := aSearchEnvironment.
+	
+	oldEntry := searchEnv currentResultEntry.
+				
+	self updateOccurenceDisplay.
+	chapterDropList items: searchEnv firstResultEntriesForEachChapters.
+	actualChapter := searchEnv currentResultEntry chapter.
+	searchInput owner clickAt.
+	
+	actualChapterPresenter scrollAt: searchEnv currentResultEntry scrollValue
+]
+
 { #category : #shortcuts }
 DocLibraryPresenter >> setShortcuts [
 	| category morph |

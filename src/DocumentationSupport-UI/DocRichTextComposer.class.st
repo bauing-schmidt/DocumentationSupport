@@ -105,14 +105,8 @@ DocRichTextComposer >> codeStylerClass [
 ]
 
 { #category : #accessing }
-DocRichTextComposer >> css: aDocModel [
-	aDocModel parent 
-		ifNil: [ [
-				| tmpCSS |
-				tmpCSS := DocBook at: aDocModel key.
-				tmpCSS ifNotNil: [cssDictionary := tmpCSS deepCopy ]
-				] on: KeyNotFound do: ["nothing"] ] 
-		ifNotNil: [ self css: aDocModel parent ]
+DocRichTextComposer >> css: aCssDict [
+	cssDictionary:= aCssDict
 ]
 
 { #category : #accessing }
@@ -177,19 +171,15 @@ DocRichTextComposer >> indexOfOccurence: aText [
 { #category : #initialization }
 DocRichTextComposer >> initialize [
 	super initialize.
-	codeStylerClass := MicCodeStylerSpec.
+	codeStylerClass := MicRichTextCodeBlockStyler.
 	self textStyler:  MicTextStyler new.
-	cssDictionary := Dictionary new.
-	cssDictionary at: #header put: OrderedCollection new;
-	at: #text put: OrderedCollection new;
-	at: #bold put: OrderedCollection new;
-	at: #italic put: OrderedCollection new;
-	at: #strike put: OrderedCollection new;
-	at: #monospace put: OrderedCollection new;
-	at: #link put: OrderedCollection new;
-	at: #code put: OrderedCollection new;
-	at: #headerSize put: OrderedCollection new
-	
+	cssDictionary := DocBook defaultStyles 
+]
+
+{ #category : #'visiting - list' }
+DocRichTextComposer >> interBlockSpacing [
+
+	^ (String cr) asText
 ]
 
 { #category : #testing }
@@ -268,7 +258,7 @@ DocRichTextComposer >> ref: aChapterKey [
 DocRichTextComposer >> refInOtherLibrary: aChapter [
 	| libraryPresenter |
 	libraryPresenter := aChapter library asPresenter.
-	libraryPresenter openWithSpec.
+	libraryPresenter open.
 	libraryPresenter clickAt: aChapter path
 ]
 
@@ -389,7 +379,7 @@ DocRichTextComposer >> visitAnnotatedParagraph: anAnnotatedParagraph [
 { #category : #'visiting-format' }
 DocRichTextComposer >> visitBold: anObject [
 	| boldAttributes |
-	boldAttributes := (cssDictionary at: #bold) deepCopy.
+	boldAttributes := OrderedCollection new.
 	boldAttributes add: (TextEmphasis bold).
 	boldAttributes add: (TextFontReference	toFont: (LogicalFont familyName: 'Source Sans Pro' pointSize: (cssDictionary at: #boldSize ifAbsent: [10]))).
 	canvas 
@@ -401,7 +391,7 @@ DocRichTextComposer >> visitBold: anObject [
 { #category : #visiting }
 DocRichTextComposer >> visitCaptionEltForTextAttributes: anObject of: aElementCSSName [
 	| textAttributes |
-	textAttributes := (cssDictionary at: aElementCSSName) deepCopy.
+	textAttributes := OrderedCollection new.
 	textAttributes add: (TextFontReference	toFont: (LogicalFont familyName: 'Source Sans Pro' pointSize: (cssDictionary at: #codeSize ifAbsent: [10]))).
 	anObject captionElements do: [ :child |
 		child class = MicTextBlock 
@@ -415,7 +405,7 @@ DocRichTextComposer >> visitCaptionEltForTextAttributes: anObject of: aElementCS
 { #category : #'visiting - document' }
 DocRichTextComposer >> visitChildrenOfForTextAttributes: anObject [
 	| textAttributes |
-	textAttributes := (cssDictionary at: #text) deepCopy.
+	textAttributes := OrderedCollection new.
 	textAttributes add: (TextFontReference	toFont: (LogicalFont familyName: 'Source Sans Pro' pointSize: (cssDictionary at: #textSize ifAbsent: [10]))).
 	anObject children do: [ :child |
 		child class = MicTextBlock 
@@ -432,14 +422,17 @@ DocRichTextComposer >> visitCode: aCodeBlock [
 	canvas newLineIfNotAlready.
 	canvas indentIn: [ 
 		canvas
-			<< (self codeStylerClass 
-				style: aCodeBlock body 
-				asLanguage: aCodeBlock language);
+			<< ((self codeStylerClass stylerFor: aCodeBlock language)
+					style: aCodeBlock body );
 			newLine.
 		aCodeBlock hasCaption ifTrue: [ 
-			self visitCaptionEltForTextAttributes: aCodeBlock of: #code]].
-	canvas << textStyler interBlockSpacing
-		
+			canvas 
+				includeAttribute: TextEmphasis bold 
+				in: [ 
+					canvas
+						<< aCodeBlock caption asText;
+					newLine ]]].
+	canvas << self interBlockSpacing
 ]
 
 { #category : #'visiting-format' }
@@ -469,7 +462,7 @@ DocRichTextComposer >> visitColumns: columnsBlock [
 				freezeHeight: morph textArea height+15))].
 	canvas 
 		newLine; 
-		<< textStyler interBlockSpacing 
+		<< self interBlockSpacing 
 	
 	
 ]
@@ -520,7 +513,7 @@ DocRichTextComposer >> visitFigure: aFigure [
 { #category : #'visiting - document' }
 DocRichTextComposer >> visitHeader: aHeader [
 	| headerAttributes |
-	headerAttributes := cssDictionary at: #header.
+	headerAttributes := OrderedCollection new.
 	(cssDictionary at: #headerSize) 
 		ifNotEmpty: [ headerAttributes add: (TextFontReference toFont: (LogicalFont familyName: 'Source Sans Pro' pointSize: (self headerLevelFont: aHeader level)asInteger)) ] 
 		ifEmpty: [ headerAttributes add: (self textStyler headerLevelFont: aHeader level) ].
@@ -528,7 +521,7 @@ DocRichTextComposer >> visitHeader: aHeader [
 	canvas
 		includeAttributes: headerAttributes
 		in: [ super visitHeader: aHeader ].
-	canvas << (textStyler spaceAfterHeaderLevel: aHeader level)
+	canvas << (textStyler crAfterHeaderLevel: aHeader level)
 ]
 
 { #category : #'visiting - document' }
@@ -542,7 +535,7 @@ DocRichTextComposer >> visitHorizontalLine: anHorizontalLine [
 { #category : #'visiting-format' }
 DocRichTextComposer >> visitItalic: anObject [
 	| italicAttributes |
-	italicAttributes := cssDictionary at: #italic.
+	italicAttributes := OrderedCollection new.
 	italicAttributes add: (TextEmphasis italic ).
 	italicAttributes add: (TextFontReference toFont: (LogicalFont familyName: 'Source Sans Pro' pointSize: (cssDictionary at: #italicSize ifAbsent: [10]))).
 	canvas 
@@ -611,17 +604,18 @@ DocRichTextComposer >> visitMathInline: aMicMathInline [
 DocRichTextComposer >> visitMonospace: anObject [
 	"Notice - I add a highlight to the backgorund rather than mono-spaced."
 	| backgroundColor sem monospaceAttributes |
-	monospaceAttributes := cssDictionary at: #monospace.
-	monospaceAttributes add: (TextFontReference	toFont: (LogicalFont familyName: 'Source Sans Pro' pointSize: (cssDictionary at: #monospaceSize ifAbsent: [10]))).
+	monospaceAttributes := OrderedCollection new.
+	monospaceAttributes add: (TextFontReference	toFont: (LogicalFont familyName: 'Source Code Pro' pointSize: (cssDictionary at: #monospaceSize ifAbsent: [10]))).
 	backgroundColor := self textStyler monospaceBackgroundColor.
 	self flag: #fixMe.
 	"Right now we stupidly emit TextAction but we should emit TextClassLink and revisit them."
 	monospaceAttributes  add: (TextBackgroundColor color: backgroundColor).
+	monospaceAttributes  add: (TextColor color: Color red muchDarker).
 	canvas 
 		includeAttributes: monospaceAttributes
 		in: [ 
 			sem := MicSemanticAction from: anObject text.
-			sem hasEntity 
+			sem hasEntity
 				ifTrue: [ canvas 
 								includeAttribute: (TextAction new actOnClickBlock: [ sem entity browse ]) 
 								in: [ super visitMonospace: anObject ] ]
@@ -642,14 +636,14 @@ DocRichTextComposer >> visitOrderedList: anObject [
 					put: (self textStyler counterFor: counter atLevel: canvas nesting - 1).
 				counter := counter + 1 ].
 		super visitOrderedList: anObject ].
-	canvas newLine; << textStyler interBlockSpacing 
+	canvas newLine; << self interBlockSpacing 
 ]
 
 { #category : #'visiting - document' }
 DocRichTextComposer >> visitParagraph: anObject [
 	canvas newLineIfNotAlready.
 	self visitChildrenOfForTextAttributes: anObject.
-	canvas newLine; << textStyler interBlockSpacing
+	canvas newLine; << self interBlockSpacing
 ]
 
 { #category : #'visiting - document' }
@@ -671,7 +665,7 @@ DocRichTextComposer >> visitQuote: aQuote [
 { #category : #'visiting-format' }
 DocRichTextComposer >> visitStrike: anObject [
 	| strikeAttributes |
-	strikeAttributes := cssDictionary at: #strike.
+	strikeAttributes := OrderedCollection new.
 	strikeAttributes add: (TextEmphasis struckOut ).
 	strikeAttributes add: (TextFontReference	toFont: (LogicalFont familyName: 'Source Sans Pro' pointSize: (cssDictionary at: #strikeSize))).
 	canvas 
@@ -702,7 +696,7 @@ DocRichTextComposer >> visitTable: tableBlock [
 	canvas 
 		<< anchoredTable;
 		newLine;
-		<< textStyler interBlockSpacing 
+		<< self interBlockSpacing 
 	
 ]
 
@@ -724,5 +718,5 @@ DocRichTextComposer >> visitUnorderedList: anObject [
 						propertyAt: #bullet
 						put: (self textStyler bulletForLevel: canvas nesting - 1) ].
 			super visitUnorderedList: anObject ].
-	canvas newLine; << textStyler interBlockSpacing 
+	canvas newLine; << self interBlockSpacing 
 ]

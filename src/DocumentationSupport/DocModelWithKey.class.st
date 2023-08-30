@@ -132,10 +132,18 @@ DocModelWithKey >> library: anObject [
 	library := anObject
 ]
 
+{ #category : #accessing }
+DocModelWithKey >> libraryKeyOrNil [
+
+	library ifNil: [ ^ nil ].
+	
+	^ library key
+]
+
 { #category : #dirty }
 DocModelWithKey >> makeDirty [ 
 
-	^ self library makeDirty
+	^ self library ifNotNil: [ :lib | lib makeDirty ]
 ]
 
 { #category : #accessing }
